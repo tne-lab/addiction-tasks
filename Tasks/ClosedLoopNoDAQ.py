@@ -64,7 +64,7 @@ class ClosedLoop(Task):
         if self.ephys:
             self.events.append(OEEvent(self, "startRecord", {"pre": "ClosedLoop"}))
 
-    def handle_input(self) -> None:
+    def all_states(self) -> None:
         self.thr = self.threshold.check()
 
     def START_RECORD(self):

@@ -9,6 +9,7 @@ from Components.Stimmer import Stimmer
 
 from Events.OEEvent import OEEvent
 from Events.InputEvent import InputEvent
+from Tasks.TaskEvents import TaskEvent, ComponentChangedEvent, TimeoutEvent
 
 
 class ERP(Task):
@@ -52,9 +53,7 @@ class ERP(Task):
     # noinspection PyMethodMayBeStatic
     def get_variables(self):
         return {
-            "last_pulse_time": 0,
             "pulse_count": 0,
-            "stim_last": False,
             "complete": False,
             "cur_jitter": 0,
             "cur_set": 1,
@@ -64,7 +63,7 @@ class ERP(Task):
         }
 
     def init_state(self):
-        return self.States.START_RECORD
+        return self.States.START_RECORD, self.record_lockout
 
     def start(self):
         self.setup.parametrize(0, self.stim_type[0], self.stim_dur[0], self.period[0], np.array(self.amps[0]), self.pws[0])
@@ -75,43 +74,42 @@ class ERP(Task):
         if self.ephys:
             self.events.append(OEEvent(self, "startRecord", {"pre": "ERP"}))
 
-    def handle_input(self) -> None:
-        commands = self.setup.check()
-        if len(commands) > 0:
-            for command in commands:
+    def all_states(self, event: TaskEvent) -> bool:
+        if isinstance(event, ComponentChangedEvent) and event.comp is self.setup:
+            for command in self.setup.commands:
                 self.events.append(InputEvent(self, self.Inputs.SJ_RESPONSE, command))
                 if command["command"] == "P":
                     self.cur_params = command
                 elif command["command"] == "C":
                     self.last_stim = command
+        return False
 
-    def START_RECORD(self):
-        if self.time_in_state() > self.record_lockout:
+    def START_RECORD(self, event: TaskEvent):
+        if isinstance(event, TimeoutEvent):
             self.cur_jitter = random.uniform(0, 1) * self.jitter
-            self.change_state(self.States.ERP)
+            self.change_state(self.States.ERP, self.min_sep + self.cur_jitter)
 
-    def ERP(self):
-        if self.cur_time - self.last_pulse_time > self.min_sep and self.cur_set > len(self.period):
-            self.change_state(self.States.STOP_RECORD)
-            if self.ephys:
-                self.events.append(OEEvent(self, "stopRecord"))
-        elif self.cur_time - self.last_pulse_time > self.min_sep + self.cur_jitter:
-            self.last_pulse_time = self.cur_time
-            if self.use_sham and self.sham_next:
-                self.sham.start(0)
-                self.sham_next = False
-                self.events.append(InputEvent(self, self.Inputs.ERP_SHAM))
+    def ERP(self, event: TaskEvent):
+        if isinstance(event, TimeoutEvent):
+            if self.cur_set > len(self.period):
+                self.change_state(self.States.STOP_RECORD, self.record_lockout)
+                if self.ephys:
+                    self.events.append(OEEvent(self, "stopRecord"))
             else:
-                self.stim.start(0)
-                self.pulse_count += 1
-                self.sham_next = True
-                self.events.append(InputEvent(self, self.Inputs.ERP_STIM))
-            self.cur_jitter = random.uniform(0, 1) * self.jitter
-            if self.pulse_count == self.npulse:
-                self.pulse_count = 0
-                if self.cur_set < len(self.period):
-                    self.setup.parametrize(0, self.stim_type[self.cur_set], self.stim_dur[self.cur_set], self.period[self.cur_set], np.array(self.amps[self.cur_set]), self.pws[self.cur_set])
-                self.cur_set += 1
+                if self.use_sham and self.sham_next:
+                    self.sham.start(0)
+                    self.sham_next = False
+                else:
+                    self.stim.start(0)
+                    self.pulse_count += 1
+                    self.sham_next = True
+                self.cur_jitter = random.uniform(0, 1) * self.jitter
+                if self.pulse_count == self.npulse:
+                    self.pulse_count = 0
+                    if self.cur_set < len(self.period):
+                        self.setup.parametrize(0, self.stim_type[self.cur_set], self.stim_dur[self.cur_set], self.period[self.cur_set], np.array(self.amps[self.cur_set]), self.pws[self.cur_set])
+                    self.cur_set += 1
+                self.change_state(self.States.ERP, self.min_sep + self.cur_jitter, {"sham": not self.sham_next})
 
     def is_complete(self):
         return self.state == self.States.STOP_RECORD and self.time_in_state() > self.record_lockout

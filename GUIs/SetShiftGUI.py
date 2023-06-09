@@ -7,7 +7,6 @@ from Elements.Element import Element
 from Elements.NosePokeElement import NosePokeElement
 from Elements.ButtonElement import ButtonElement
 from Elements.InfoBoxElement import InfoBoxElement
-from Events.InputEvent import InputEvent
 from GUIs.GUI import GUI
 
 
@@ -21,18 +20,17 @@ class SetShiftGUI(GUI):
         self.np_inputs = []
         self.info_boxes = []
 
-        def feed_mouse_up(self, _):
-            self.clicked = False
-            task.food.toggle(task.dispense_time)
-            task.events.append(InputEvent(task, SetShiftGUI.Inputs.GUI_PELLET))
+        def feed_mouse_up(el, _):
+            el.clicked = False
+            self.log_gui_event(self.Inputs.GUI_PELLET)
 
-        def pellets_text(self):
+        def pellets_text(_):
             return [str(task.food.count)]
 
-        def trial_count_text(self):
+        def trial_count_text(_):
             return [str(task.cur_trial+1)]
 
-        def time_in_trial_text(self):
+        def time_in_trial_text(_):
             return [str(round(task.time_elapsed() / 60, 2))]
 
         for i in range(3):

@@ -4,9 +4,11 @@ from enum import Enum
 from Components.BinaryInput import BinaryInput
 from Components.Toggle import Toggle
 from Components.TimedToggle import TimedToggle
-from Events.InputEvent import InputEvent
+from Tasks import TaskEvents
 
 from Tasks.Task import Task
+
+from ..GUIs.SetShiftGUI import SetShiftGUI
 
 
 class SetShift(Task):
@@ -69,45 +71,39 @@ class SetShift(Task):
         self.chamber_light.toggle(False)
 
     def start(self):
+        self.set_timeout("task_complete", self.max_duration * 60)
         self.chamber_light.toggle(False)
-        self.nose_poke_lights[1].toggle(True)
 
     def stop(self):
         self.chamber_light.toggle(True)
         for i in range(3):
             self.nose_poke_lights[i].toggle(False)
 
-    def handle_input(self):
-        self.pokes = []
-        for i in range(3):
-            self.pokes.append(self.nose_pokes[i].check())
-            if self.pokes[i] == BinaryInput.ENTERED:
-                if i == 0:
-                    self.events.append(InputEvent(self, self.Inputs.FRONT_ENTERED))
-                elif i == 1:
-                    self.events.append(InputEvent(self, self.Inputs.MIDDLE_ENTERED))
-                elif i == 2:
-                    self.events.append(InputEvent(self, self.Inputs.REAR_ENTERED))
-            elif self.pokes[i] == BinaryInput.EXIT:
-                if i == 0:
-                    self.events.append(InputEvent(self, self.Inputs.FRONT_EXIT))
-                elif i == 1:
-                    self.events.append(InputEvent(self, self.Inputs.MIDDLE_EXIT))
-                elif i == 2:
-                    self.events.append(InputEvent(self, self.Inputs.REAR_EXIT))
+    def all_states(self, event: TaskEvents.TaskEvent) -> bool:
+        if isinstance(event, TaskEvents.TimeoutEvent) and event.name == "task_complete":
+            self.complete = True
+            return True
+        elif isinstance(event, TaskEvents.GUIEvent) and event.event == SetShiftGUI.Inputs.GUI_PELLET:
+            self.food.toggle(self.dispense_time)
+            return True
+        return False
 
-    def INITIATION(self):
-        if self.pokes[1] == BinaryInput.ENTERED:
+    def INITIATION(self, event: TaskEvents.TaskEvent):
+        if isinstance(event, TaskEvents.StateEnterEvent):
+            self.nose_poke_lights[1].toggle(True)
+        elif isinstance(event, TaskEvents.ComponentChangedEvent) and event.comp is self.nose_pokes[1] and event.comp:
             self.nose_poke_lights[1].toggle(False)
+            self.change_state(self.States.RESPONSE, {"light_location": self.light_sequence[self.cur_trial]})
+
+    def RESPONSE(self, event: TaskEvents.TaskEvent):
+        metadata = {}
+        if isinstance(event, TaskEvents.StateEnterEvent):
             if self.light_sequence[self.cur_trial]:
                 self.nose_poke_lights[2].toggle(True)
             else:
                 self.nose_poke_lights[0].toggle(True)
-            self.change_state(self.States.RESPONSE, {"light_location": self.light_sequence[self.cur_trial]})
-
-    def RESPONSE(self):
-        metadata = {}
-        if self.pokes[0] == BinaryInput.ENTERED or self.pokes[2] == BinaryInput.ENTERED:
+            self.set_timeout("response_timeout", self.response_duration)
+        elif isinstance(event, TaskEvents.ComponentChangedEvent) and (event.comp is self.nose_pokes[0] or event.comp is self.nose_pokes[2]) and event.comp:
             if self.cur_trial < self.n_random_start or self.cur_trial >= self.n_random_start + self.correct_to_switch * len(
                     self.rule_sequence):
                 if random.random() < 0.5:
@@ -122,8 +118,8 @@ class SetShift(Task):
                 metadata["cur_block"] = self.cur_block
                 metadata["rule_index"] = self.cur_rule
                 if self.rule_sequence[self.cur_rule] == 0:
-                    if (self.pokes[0] == BinaryInput.ENTERED and not self.light_sequence[self.cur_trial]) or (
-                            self.pokes[2] == BinaryInput.ENTERED and self.light_sequence[self.cur_trial]):
+                    if (event.comp is self.nose_pokes[0] and not self.light_sequence[self.cur_trial]) or (
+                            event.comp is self.nose_pokes[2] and self.light_sequence[self.cur_trial]):
                         self.correct()
                         metadata["accuracy"] = "correct"
                     else:
@@ -131,7 +127,7 @@ class SetShift(Task):
                         self.cur_block = 0
                         metadata["accuracy"] = "incorrect"
                 elif self.rule_sequence[self.cur_rule] == 1:
-                    if self.pokes[0] == BinaryInput.ENTERED:
+                    if event.comp is self.nose_pokes[0]:
                         self.correct()
                         metadata["accuracy"] = "correct"
                     else:
@@ -139,17 +135,15 @@ class SetShift(Task):
                         self.cur_block = 0
                         metadata["accuracy"] = "incorrect"
                 elif self.rule_sequence[self.cur_rule] == 2:
-                    if self.pokes[2] == BinaryInput.ENTERED:
+                    if event.comp is self.nose_pokes[2]:
                         self.correct()
                         metadata["accuracy"] = "correct"
                     else:
                         self.cur_trial -= self.cur_block
                         self.cur_block = 0
                         metadata["accuracy"] = "incorrect"
-            self.nose_poke_lights[0].toggle(False)
-            self.nose_poke_lights[2].toggle(False)
             self.change_state(self.States.INTER_TRIAL_INTERVAL, metadata)
-        elif self.time_in_state() > self.response_duration:
+        elif isinstance(event, TaskEvents.TimeoutEvent) and event.name == "response_timeout":
             if self.cur_trial < self.n_random_start or self.cur_trial >= self.n_random_start + self.correct_to_switch * len(
                     self.rule_sequence):
                 metadata["rule_index"] = -1
@@ -159,18 +153,20 @@ class SetShift(Task):
                 metadata["rule_index"] = self.cur_rule
             metadata["accuracy"] = "incorrect"
             metadata["response"] = "none"
+            self.change_state(self.States.INTER_TRIAL_INTERVAL, metadata)
+        elif isinstance(event, TaskEvents.StateExitEvent):
             self.nose_poke_lights[0].toggle(False)
             self.nose_poke_lights[2].toggle(False)
-            self.change_state(self.States.INTER_TRIAL_INTERVAL, metadata)
 
-    def INTER_TRIAL_INTERVAL(self):
-        if self.time_in_state() > self.inter_trial_interval:
+    def INTER_TRIAL_INTERVAL(self, event: TaskEvents.TaskEvent):
+        if isinstance(event, TaskEvents.StateEnterEvent):
+            self.set_timeout("iti_timeout", self.inter_trial_interval)
+        elif isinstance(event, TaskEvents.TimeoutEvent) and event.name == "iti_timeout":
             self.nose_poke_lights[1].toggle(True)
             self.change_state(self.States.INITIATION)
 
     def is_complete(self):
-        return self.cur_trial == self.n_random_start + self.n_random_end + self.correct_to_switch * len(
-            self.rule_sequence) or self.time_elapsed() > self.max_duration * 60
+        return self.cur_trial == self.n_random_start + self.n_random_end + self.correct_to_switch * len(self.rule_sequence)
 
     def correct(self):
         self.food.toggle(self.dispense_time)
