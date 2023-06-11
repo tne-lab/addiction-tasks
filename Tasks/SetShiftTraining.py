@@ -1,12 +1,12 @@
 from enum import Enum
 
+from Events import PybEvents
 from Tasks.Task import Task
 
 from Components.BinaryInput import BinaryInput
 from Components.TimedToggle import TimedToggle
 from Components.Toggle import Toggle
 from Events.InputEvent import InputEvent
-from Tasks.TaskEvents import TaskEvent, ComponentChangedEvent, TimeoutEvent, GUIEvent
 
 from ..GUIs.SetShiftTrainingGUI import SetShiftTrainingGUI
 
@@ -71,7 +71,7 @@ class SetShiftTraining(Task):
         self.chamber_light.toggle(False)
 
     def start(self):
-        self.task_timeout.start(self.max_duration * 60)
+        self.task_timeout.begin(self.max_duration * 60)
         self.chamber_light.toggle(False)
 
     def stop(self):
@@ -79,8 +79,8 @@ class SetShiftTraining(Task):
         for i in range(3):
             self.nose_poke_lights[i].toggle(False)
 
-    def all_states(self, event: TaskEvent) -> None:
-        if isinstance(event, ComponentChangedEvent):
+    def all_states(self, event: PybEvents.TaskEvent) -> None:
+        if isinstance(event, PybEvents.ComponentChangedEvent):
             if event.comp is self.feed_press:
                 if event.comp.state:
                     self.reset = True
@@ -103,13 +103,13 @@ class SetShiftTraining(Task):
                             elif i == 2:
                                 self.events.append(InputEvent(self, self.Inputs.REAR_EXIT))
 
-    def RESPONSE(self, event: TaskEvent):
-        if isinstance(event, TimeoutEvent):
+    def RESPONSE(self, event: PybEvents.TaskEvent):
+        if isinstance(event, PybEvents.TimeoutEvent):
             self.nose_poke_lights[0].toggle(False)
             self.nose_poke_lights[2].toggle(False)
             self.pokes = 0
             self.change_state(self.States.INTER_TRIAL_INTERVAL)
-        elif isinstance(event, ComponentChangedEvent) and (event.comp is self.nose_pokes[0] or event.comp is self.nose_pokes[2]) and event.comp:
+        elif isinstance(event, PybEvents.ComponentChangedEvent) and (event.comp is self.nose_pokes[0] or event.comp is self.nose_pokes[2]) and event.comp:
             if event.comp is self.nose_pokes[0]:
                 if (self.nose_poke_lights[0].get_state() and self.training_stage == 'light') or self.training_stage == 'front':
                     self.food.toggle(self.dispense_time)
@@ -125,17 +125,17 @@ class SetShiftTraining(Task):
             self.nose_poke_lights[0].toggle(False)
             self.nose_poke_lights[2].toggle(False)
             self.change_state(self.States.INTER_TRIAL_INTERVAL)
-        elif isinstance(event, GUIEvent) and event.event == SetShiftTrainingGUI.Inputs.GUI_SHAPE:
+        elif isinstance(event, PybEvents.GUIEvent) and event.event == SetShiftTrainingGUI.Inputs.GUI_SHAPE:
             self.pokes = 0
             self.food.toggle(self.dispense_time)
             self.nose_poke_lights[0].toggle(False)
             self.nose_poke_lights[2].toggle(False)
             self.change_state(self.States.INTER_TRIAL_INTERVAL)
 
-    def INITIATION(self, event: TaskEvent):
-        if (isinstance(event, ComponentChangedEvent) and event.comp is self.nose_pokes[1]) \
-                or (isinstance(event, GUIEvent) and event.event == SetShiftTrainingGUI.Inputs.GUI_INIT):
-            if isinstance(event, GUIEvent):
+    def INITIATION(self, event: PybEvents.TaskEvent):
+        if (isinstance(event, PybEvents.ComponentChangedEvent) and event.comp is self.nose_pokes[1]) \
+                or (isinstance(event, PybEvents.GUIEvent) and event.event == SetShiftTrainingGUI.Inputs.GUI_INIT):
+            if isinstance(event, PybEvents.GUIEvent):
                 self.pokes = 0
             self.nose_poke_lights[1].toggle(False)
             if self.training_stage == 'middle':
@@ -145,14 +145,14 @@ class SetShiftTraining(Task):
             else:
                 self.nose_poke_lights[2*self.light_seq[self.pokes]].toggle(True)
                 self.change_state(self.States.RESPONSE)
-        elif isinstance(event, GUIEvent) and event.event == SetShiftTrainingGUI.Inputs.GUI_SHAPE:
+        elif isinstance(event, PybEvents.GUIEvent) and event.event == SetShiftTrainingGUI.Inputs.GUI_SHAPE:
             self.pokes = 0
             self.food.toggle(self.dispense_time)
             self.nose_poke_lights[1].toggle(False)
             self.change_state(self.States.INTER_TRIAL_INTERVAL)
 
-    def INTER_TRIAL_INTERVAL(self, event: TaskEvent):
-        if isinstance(event, TimeoutEvent):
+    def INTER_TRIAL_INTERVAL(self, event: PybEvents.TaskEvent):
+        if isinstance(event, PybEvents.TimeoutEvent):
             self.nose_poke_lights[1].toggle(True)
             self.change_state(self.States.INITIATION)
 

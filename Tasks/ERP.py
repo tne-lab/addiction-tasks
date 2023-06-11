@@ -4,12 +4,12 @@ import random
 import numpy as np
 
 from Components.StimJim import StimJim
+from Events import PybEvents
 from Tasks.Task import Task
 from Components.Stimmer import Stimmer
 
 from Events.OEEvent import OEEvent
 from Events.InputEvent import InputEvent
-from Tasks.TaskEvents import TaskEvent, ComponentChangedEvent, TimeoutEvent
 
 
 class ERP(Task):
@@ -74,8 +74,8 @@ class ERP(Task):
         if self.ephys:
             self.events.append(OEEvent(self, "startRecord", {"pre": "ERP"}))
 
-    def all_states(self, event: TaskEvent) -> bool:
-        if isinstance(event, ComponentChangedEvent) and event.comp is self.setup:
+    def all_states(self, event: PybEvents.TaskEvent) -> bool:
+        if isinstance(event, PybEvents.ComponentChangedEvent) and event.comp is self.setup:
             for command in self.setup.commands:
                 self.events.append(InputEvent(self, self.Inputs.SJ_RESPONSE, command))
                 if command["command"] == "P":
@@ -84,13 +84,13 @@ class ERP(Task):
                     self.last_stim = command
         return False
 
-    def START_RECORD(self, event: TaskEvent):
-        if isinstance(event, TimeoutEvent):
+    def START_RECORD(self, event: PybEvents.TaskEvent):
+        if isinstance(event, PybEvents.TimeoutEvent):
             self.cur_jitter = random.uniform(0, 1) * self.jitter
             self.change_state(self.States.ERP, self.min_sep + self.cur_jitter)
 
-    def ERP(self, event: TaskEvent):
-        if isinstance(event, TimeoutEvent):
+    def ERP(self, event: PybEvents.TaskEvent):
+        if isinstance(event, PybEvents.TimeoutEvent):
             if self.cur_set > len(self.period):
                 self.change_state(self.States.STOP_RECORD, self.record_lockout)
                 if self.ephys:
@@ -109,7 +109,7 @@ class ERP(Task):
                     if self.cur_set < len(self.period):
                         self.setup.parametrize(0, self.stim_type[self.cur_set], self.stim_dur[self.cur_set], self.period[self.cur_set], np.array(self.amps[self.cur_set]), self.pws[self.cur_set])
                     self.cur_set += 1
-                self.change_state(self.States.ERP, self.min_sep + self.cur_jitter, {"sham": not self.sham_next})
+                self.change_state(self.States.ERP, {"sham": not self.sham_next})
 
     def is_complete(self):
         return self.state == self.States.STOP_RECORD and self.time_in_state() > self.record_lockout

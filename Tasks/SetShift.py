@@ -4,7 +4,7 @@ from enum import Enum
 from Components.BinaryInput import BinaryInput
 from Components.Toggle import Toggle
 from Components.TimedToggle import TimedToggle
-from Tasks import TaskEvents
+from Events import PybEvents
 
 from Tasks.Task import Task
 
@@ -79,31 +79,31 @@ class SetShift(Task):
         for i in range(3):
             self.nose_poke_lights[i].toggle(False)
 
-    def all_states(self, event: TaskEvents.TaskEvent) -> bool:
-        if isinstance(event, TaskEvents.TimeoutEvent) and event.name == "task_complete":
+    def all_states(self, event: PybEvents.PybEvent) -> bool:
+        if isinstance(event, PybEvents.TimeoutEvent) and event.name == "task_complete":
             self.complete = True
             return True
-        elif isinstance(event, TaskEvents.GUIEvent) and event.event == SetShiftGUI.Inputs.GUI_PELLET:
+        elif isinstance(event, PybEvents.GUIEvent) and event.event == SetShiftGUI.Inputs.GUI_PELLET:
             self.food.toggle(self.dispense_time)
             return True
         return False
 
-    def INITIATION(self, event: TaskEvents.TaskEvent):
-        if isinstance(event, TaskEvents.StateEnterEvent):
+    def INITIATION(self, event: PybEvents.PybEvent):
+        if isinstance(event, PybEvents.StateEnterEvent):
             self.nose_poke_lights[1].toggle(True)
-        elif isinstance(event, TaskEvents.ComponentChangedEvent) and event.comp is self.nose_pokes[1] and event.comp:
+        elif isinstance(event, PybEvents.ComponentChangedEvent) and event.comp is self.nose_pokes[1] and event.comp:
             self.nose_poke_lights[1].toggle(False)
             self.change_state(self.States.RESPONSE, {"light_location": self.light_sequence[self.cur_trial]})
 
-    def RESPONSE(self, event: TaskEvents.TaskEvent):
+    def RESPONSE(self, event: PybEvents.PybEvent):
         metadata = {}
-        if isinstance(event, TaskEvents.StateEnterEvent):
+        if isinstance(event, PybEvents.StateEnterEvent):
             if self.light_sequence[self.cur_trial]:
                 self.nose_poke_lights[2].toggle(True)
             else:
                 self.nose_poke_lights[0].toggle(True)
             self.set_timeout("response_timeout", self.response_duration)
-        elif isinstance(event, TaskEvents.ComponentChangedEvent) and (event.comp is self.nose_pokes[0] or event.comp is self.nose_pokes[2]) and event.comp:
+        elif isinstance(event, PybEvents.ComponentChangedEvent) and (event.comp is self.nose_pokes[0] or event.comp is self.nose_pokes[2]) and event.comp:
             if self.cur_trial < self.n_random_start or self.cur_trial >= self.n_random_start + self.correct_to_switch * len(
                     self.rule_sequence):
                 if random.random() < 0.5:
@@ -143,7 +143,7 @@ class SetShift(Task):
                         self.cur_block = 0
                         metadata["accuracy"] = "incorrect"
             self.change_state(self.States.INTER_TRIAL_INTERVAL, metadata)
-        elif isinstance(event, TaskEvents.TimeoutEvent) and event.name == "response_timeout":
+        elif isinstance(event, PybEvents.TimeoutEvent) and event.name == "response_timeout":
             if self.cur_trial < self.n_random_start or self.cur_trial >= self.n_random_start + self.correct_to_switch * len(
                     self.rule_sequence):
                 metadata["rule_index"] = -1
@@ -154,14 +154,14 @@ class SetShift(Task):
             metadata["accuracy"] = "incorrect"
             metadata["response"] = "none"
             self.change_state(self.States.INTER_TRIAL_INTERVAL, metadata)
-        elif isinstance(event, TaskEvents.StateExitEvent):
+        elif isinstance(event, PybEvents.StateExitEvent):
             self.nose_poke_lights[0].toggle(False)
             self.nose_poke_lights[2].toggle(False)
 
-    def INTER_TRIAL_INTERVAL(self, event: TaskEvents.TaskEvent):
-        if isinstance(event, TaskEvents.StateEnterEvent):
+    def INTER_TRIAL_INTERVAL(self, event: PybEvents.PybEvent):
+        if isinstance(event, PybEvents.StateEnterEvent):
             self.set_timeout("iti_timeout", self.inter_trial_interval)
-        elif isinstance(event, TaskEvents.TimeoutEvent) and event.name == "iti_timeout":
+        elif isinstance(event, PybEvents.TimeoutEvent) and event.name == "iti_timeout":
             self.nose_poke_lights[1].toggle(True)
             self.change_state(self.States.INITIATION)
 
