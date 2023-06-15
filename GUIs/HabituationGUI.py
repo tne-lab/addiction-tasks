@@ -5,12 +5,11 @@ from types import MethodType
 from Elements.Element import Element
 from Elements.ButtonElement import ButtonElement
 from Elements.InfoBoxElement import InfoBoxElement
-from Events.InputEvent import InputEvent
 from GUIs.GUI import GUI
 
 
 class HabituationGUI(GUI):
-    class Inputs(Enum):
+    class Events(Enum):
         GUI_FEED = 0
 
     def __init__(self, task_gui, task):
@@ -19,8 +18,7 @@ class HabituationGUI(GUI):
 
         def feed_mouse_up(self, _):
             self.clicked = False
-            task.reset = True
-            task.events.append(InputEvent(task, HabituationGUI.Inputs.GUI_FEED))
+            self.log_gui_event(self.Events.GUI_FEED)
 
         def pellets_text(self):
             return [str(task.food.count)]

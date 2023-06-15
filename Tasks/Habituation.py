@@ -1,9 +1,12 @@
 from enum import Enum
 
+from Events import PybEvents
 from Tasks.Task import Task
 
 from Components.TimedToggle import TimedToggle
 from Components.Toggle import Toggle
+
+from ..GUIs.HabituationGUI import HabituationGUI
 
 
 class Habituation(Task):
@@ -49,18 +52,30 @@ class Habituation(Task):
     def stop(self):
         self.chamber_light.toggle(True)
 
-    def BEGIN(self):
-        if self.time_in_state() > self.begin_delay:
+    def all_states(self, event: PybEvents.PybEvent) -> bool:
+        if isinstance(event, PybEvents.GUIEvent) and event.event == HabituationGUI.Events.GUI_FEED:
             self.food.toggle(self.dispense_time)
+            return True
+        return False
+
+    def BEGIN(self, event: PybEvents.PybEvent):
+        if isinstance(event, PybEvents.StateEnterEvent):
+            self.set_timeout("begin_delay", self.begin_delay)
+        elif isinstance(event, PybEvents.TimeoutEvent) and event.name == "begin_delay":
             self.change_state(self.States.DISPENSE)
 
-    def DISPENSE(self):
-        if self.time_in_state() > self.inter_dispense_interval:
+    def DISPENSE(self, event: PybEvents.PybEvent):
+        if isinstance(event, PybEvents.StateEnterEvent):
+            self.set_timeout("dispense", self.inter_dispense_interval)
+        elif isinstance(event, PybEvents.TimeoutEvent) and event.name == "dispense":
             self.food.toggle(self.dispense_time)
             if self.food.count < self.pellets:
                 self.change_state(self.States.DISPENSE)
             else:
                 self.change_state(self.States.END)
 
-    def is_complete(self):
-        return self.state == self.States.END and self.time_in_state() > self.end_delay
+    def END(self, event: PybEvents.PybEvent):
+        if isinstance(event, PybEvents.StateEnterEvent):
+            self.set_timeout("end", self.end_delay)
+        elif isinstance(event, PybEvents.TimeoutEvent) and event.name == "end":
+            self.complete = True

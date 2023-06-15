@@ -11,7 +11,7 @@ from GUIs.GUI import GUI
 
 
 class SetShiftTrainingGUI(GUI):
-    class Inputs(Enum):
+    class Events(Enum):
         GUI_SHAPE = 0
         GUI_INIT = 1
 
@@ -23,11 +23,11 @@ class SetShiftTrainingGUI(GUI):
 
         def feed_mouse_up(el, _):
             el.clicked = False
-            self.log_gui_event(self.Inputs.GUI_SHAPE)
+            self.log_gui_event(self.Events.GUI_SHAPE)
 
         def init_mouse_up(el, _):
             el.clicked = False
-            self.log_gui_event(self.Inputs.GUI_INIT)
+            self.log_gui_event(self.Events.GUI_INIT)
 
         def pellets_text(_):
             return [str(task.food.count)]

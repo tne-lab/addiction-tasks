@@ -8,9 +8,6 @@ from Events import PybEvents
 from Tasks.Task import Task
 from Components.Stimmer import Stimmer
 
-from Events.OEEvent import OEEvent
-from Events.InputEvent import InputEvent
-
 
 class ERP(Task):
     """@DynamicAttrs"""
@@ -19,10 +16,10 @@ class ERP(Task):
         ERP = 1
         STOP_RECORD = 2
 
-    class Inputs(Enum):
-        ERP_STIM = 0
+    class Events(Enum):
+        STIM = 0
         SJ_RESPONSE = 1
-        ERP_SHAM = 2
+        SHAM = 2
 
     @staticmethod
     def get_components():
@@ -63,7 +60,7 @@ class ERP(Task):
         }
 
     def init_state(self):
-        return self.States.START_RECORD, self.record_lockout
+        return self.States.START_RECORD
 
     def start(self):
         self.setup.parametrize(0, self.stim_type[0], self.stim_dur[0], self.period[0], np.array(self.amps[0]), self.pws[0])
@@ -72,44 +69,56 @@ class ERP(Task):
         if self.use_sham:
             self.sham.parametrize(0, 1, self.trig_dur, self.trig_dur, np.array([[self.trig_amp]]), [self.trig_dur])
         if self.ephys:
-            self.events.append(OEEvent(self, "startRecord", {"pre": "ERP"}))
+            self.log_event(PybEvents.OEEvent(self, "startRecord", {"pre": "ERP"}))
 
-    def all_states(self, event: PybEvents.TaskEvent) -> bool:
+    def stop(self) -> None:
+        if self.ephys:
+            self.log_event(PybEvents.OEEvent(self, "stopRecord"))
+
+    def all_states(self, event: PybEvents.PybEvent) -> bool:
         if isinstance(event, PybEvents.ComponentChangedEvent) and event.comp is self.setup:
             for command in self.setup.commands:
-                self.events.append(InputEvent(self, self.Inputs.SJ_RESPONSE, command))
+                self.events.append(PybEvents.InfoEvent(self, self.Events.SJ_RESPONSE, command))
                 if command["command"] == "P":
                     self.cur_params = command
                 elif command["command"] == "C":
                     self.last_stim = command
+            return True
         return False
 
-    def START_RECORD(self, event: PybEvents.TaskEvent):
-        if isinstance(event, PybEvents.TimeoutEvent):
-            self.cur_jitter = random.uniform(0, 1) * self.jitter
-            self.change_state(self.States.ERP, self.min_sep + self.cur_jitter)
+    def START_RECORD(self, event: PybEvents.PybEvent):
+        if isinstance(event, PybEvents.StateEnterEvent):
+            self.set_timeout("start_record", self.record_lockout)
+        if isinstance(event, PybEvents.TimeoutEvent) and event.name == "start_record":
+            self.change_state(self.States.ERP)
 
-    def ERP(self, event: PybEvents.TaskEvent):
-        if isinstance(event, PybEvents.TimeoutEvent):
+    def ERP(self, event: PybEvents.PybEvent):
+        if isinstance(event, PybEvents.StateEnterEvent):
+            self.cur_jitter = random.uniform(0, 1) * self.jitter
+            self.set_timeout("erp", self.cur_jitter + self.min_sep)
+        if isinstance(event, PybEvents.TimeoutEvent) and event.name == "erp":
             if self.cur_set > len(self.period):
-                self.change_state(self.States.STOP_RECORD, self.record_lockout)
-                if self.ephys:
-                    self.events.append(OEEvent(self, "stopRecord"))
+                self.change_state(self.States.STOP_RECORD)
             else:
                 if self.use_sham and self.sham_next:
                     self.sham.start(0)
                     self.sham_next = False
+                    self.log_event(PybEvents.InfoEvent(self, self.Events.SHAM))
                 else:
                     self.stim.start(0)
                     self.pulse_count += 1
                     self.sham_next = True
+                    self.log_event(PybEvents.InfoEvent(self, self.Events.STIM))
                 self.cur_jitter = random.uniform(0, 1) * self.jitter
                 if self.pulse_count == self.npulse:
                     self.pulse_count = 0
                     if self.cur_set < len(self.period):
                         self.setup.parametrize(0, self.stim_type[self.cur_set], self.stim_dur[self.cur_set], self.period[self.cur_set], np.array(self.amps[self.cur_set]), self.pws[self.cur_set])
                     self.cur_set += 1
-                self.change_state(self.States.ERP, {"sham": not self.sham_next})
+                self.set_timeout("erp", self.cur_jitter + self.min_sep)
 
-    def is_complete(self):
-        return self.state == self.States.STOP_RECORD and self.time_in_state() > self.record_lockout
+    def STOP_RECORD(self, event: PybEvents.PybEvent):
+        if isinstance(event, PybEvents.StateEnterEvent):
+            self.set_timeout("stop_record", self.record_lockout)
+        if isinstance(event, PybEvents.TimeoutEvent) and event.name == "stop_record":
+            self.complete = True

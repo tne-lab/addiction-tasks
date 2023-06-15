@@ -18,14 +18,6 @@ class SetShift(Task):
         RESPONSE = 1
         INTER_TRIAL_INTERVAL = 2
 
-    class Inputs(Enum):
-        FRONT_ENTERED = 2
-        FRONT_EXIT = 3
-        MIDDLE_ENTERED = 4
-        MIDDLE_EXIT = 5
-        REAR_ENTERED = 6
-        REAR_EXIT = 7
-
     @staticmethod
     def get_components():
         return {
@@ -71,7 +63,7 @@ class SetShift(Task):
         self.chamber_light.toggle(False)
 
     def start(self):
-        self.set_timeout("task_complete", self.max_duration * 60)
+        self.set_timeout("task_complete", self.max_duration * 60, end_with_state=False)
         self.chamber_light.toggle(False)
 
     def stop(self):
@@ -83,7 +75,7 @@ class SetShift(Task):
         if isinstance(event, PybEvents.TimeoutEvent) and event.name == "task_complete":
             self.complete = True
             return True
-        elif isinstance(event, PybEvents.GUIEvent) and event.event == SetShiftGUI.Inputs.GUI_PELLET:
+        elif isinstance(event, PybEvents.GUIEvent) and event.event == SetShiftGUI.Events.GUI_PELLET:
             self.food.toggle(self.dispense_time)
             return True
         return False
@@ -98,10 +90,7 @@ class SetShift(Task):
     def RESPONSE(self, event: PybEvents.PybEvent):
         metadata = {}
         if isinstance(event, PybEvents.StateEnterEvent):
-            if self.light_sequence[self.cur_trial]:
-                self.nose_poke_lights[2].toggle(True)
-            else:
-                self.nose_poke_lights[0].toggle(True)
+            self.nose_poke_lights[2 * self.light_sequence[self.cur_trial]].toggle(True)
             self.set_timeout("response_timeout", self.response_duration)
         elif isinstance(event, PybEvents.ComponentChangedEvent) and (event.comp is self.nose_pokes[0] or event.comp is self.nose_pokes[2]) and event.comp:
             if self.cur_trial < self.n_random_start or self.cur_trial >= self.n_random_start + self.correct_to_switch * len(

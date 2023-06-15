@@ -1,5 +1,6 @@
 from enum import Enum
 
+from Events import PybEvents
 from Tasks.Task import Task
 from Components.TimedToggle import TimedToggle
 
@@ -27,13 +28,17 @@ class FoodDispenserTest(Task):
     def init_state(self):
         return self.States.WAIT
 
-    def WAIT(self):
-        if self.time_in_state() > self.delay:
-            self.food.toggle(self.dispense_time)
+    def WAIT(self, event: PybEvents.PybEvent):
+        if isinstance(event, PybEvents.StateEnterEvent):
+            self.set_timeout("wait", self.delay)
+        elif isinstance(event, PybEvents.TimeoutEvent) and event.name == "wait":
             self.change_state(self.States.ACTIVE)
 
-    def ACTIVE(self):
-        if self.time_in_state() > self.dispense_time:
+    def ACTIVE(self, event: PybEvents.PybEvent):
+        if isinstance(event, PybEvents.StateEnterEvent):
+            self.food.toggle(self.dispense_time)
+            self.set_timeout("dispense", self.dispense_time)
+        elif isinstance(event, PybEvents.TimeoutEvent) and event.name == "dispense":
             self.change_state(self.States.WAIT)
 
     def is_complete(self):

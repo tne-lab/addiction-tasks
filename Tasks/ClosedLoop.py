@@ -1,13 +1,12 @@
 from enum import Enum
 
 import numpy as np
+
+from Events import PybEvents
 from Tasks.Task import Task
 from Components.BinaryInput import BinaryInput
 from Components.Stimmer import Stimmer
 from Components.StimJim import StimJim
-from Events.InputEvent import InputEvent
-
-from Events.OEEvent import OEEvent
 
 
 class ClosedLoop(Task):
@@ -17,7 +16,7 @@ class ClosedLoop(Task):
         CLOSED_LOOP = 1
         STOP_RECORD = 2
 
-    class Inputs(Enum):
+    class Events(Enum):
         STIM = 0
         SHAM = 1
 
@@ -52,8 +51,7 @@ class ClosedLoop(Task):
             'last_pulse_time': 0,
             'pulse_count': 0,
             'stim_last': False,
-            'complete': False,
-            'thr': None
+            'complete': False
         }
 
     def init_state(self):
@@ -65,31 +63,43 @@ class ClosedLoop(Task):
         self.stim.parametrize(0, 1, self.trig_dur, self.trig_dur, np.array([[self.trig_amp]]), [self.trig_dur])
         self.sham.parametrize(0, 1, self.trig_dur, self.trig_dur, np.array([[self.trig_amp]]), [self.trig_dur])
         if self.ephys:
-            self.events.append(OEEvent(self, "startRecord", {"pre": "ClosedLoop"}))
+            self.log_event(PybEvents.OEEvent(self, "startRecord", {"pre": "ClosedLoop"}))
 
-    def all_states(self) -> None:
-        self.thr = self.threshold.check()
+    def stop(self):
+        if self.ephys:
+            self.log_event(PybEvents.OEEvent(self.metadata["chamber"], "stopRecord"))
 
-    def START_RECORD(self):
-        if self.time_in_state() > self.record_lockout:
+    def all_states(self, event: PybEvents.PybEvent) -> bool:
+        if isinstance(event, PybEvents.TimeoutEvent) and event.name == "task_complete":
+            self.complete = True
+            return True
+        return False
+
+    def START_RECORD(self, event: PybEvents.PybEvent):
+        if isinstance(event, PybEvents.StateEnterEvent):
+            self.set_timeout("start_record", self.record_lockout)
+        if isinstance(event, PybEvents.TimeoutEvent) and event.name == "start_record":
             self.change_state(self.States.CLOSED_LOOP)
 
-    def CLOSED_LOOP(self):
-        if self.cur_time - self.last_pulse_time > self.min_pulse_separation and self.time_in_state() > self.duration * 60:
+    def CLOSED_LOOP(self, event: PybEvents.PybEvent):
+        if isinstance(event, PybEvents.StateEnterEvent):
+            self.set_timeout("closed_loop_complete", self.duration)
+        elif isinstance(event, PybEvents.TimeoutEvent) and event.name == "closed_loop_complete":
             self.change_state(self.States.STOP_RECORD)
-            if self.ephys:
-                self.events.append(OEEvent(self, "stopRecord"))
-        else:
+        elif isinstance(event, PybEvents.ComponentChangedEvent) and event.comp == self.threshold:
             if self.cur_time - self.last_pulse_time > self.min_pulse_separation:
-                if self.thr == BinaryInput.ENTERED:
+                if self.threshold.state:
                     if not self.stim_last:
-                        self.events.append(InputEvent(self, self.Inputs.STIM))
+                        self.log_event(PybEvents.InfoEvent(self, self.Events.STIM))
                         self.stim.start(0)
                         self.pulse_count += 1
                     else:
-                        self.events.append(InputEvent(self, self.Inputs.SHAM))
+                        self.log_event(PybEvents.InfoEvent(self, self.Events.SHAM))
                         self.sham.start(0)
                     self.stim_last = not self.stim_last
 
-    def is_complete(self):
-        return self.state == self.States.STOP_RECORD and self.time_in_state() > self.record_lockout
+    def STOP_RECORD(self, event: PybEvents.PybEvent):
+        if isinstance(event, PybEvents.StateEnterEvent):
+            self.set_timeout("stop_record", self.record_lockout)
+        if isinstance(event, PybEvents.TimeoutEvent) and event.name == "stop_record":
+            self.complete = True
