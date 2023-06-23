@@ -78,7 +78,7 @@ class ERP(Task):
     def all_states(self, event: PybEvents.PybEvent) -> bool:
         if isinstance(event, PybEvents.ComponentChangedEvent) and event.comp is self.setup:
             for command in self.setup.commands:
-                self.events.append(PybEvents.InfoEvent(self, self.Events.SJ_RESPONSE, command))
+                self.log_event(PybEvents.InfoEvent(self, self.Events.SJ_RESPONSE, command))
                 if command["command"] == "P":
                     self.cur_params = command
                 elif command["command"] == "C":
