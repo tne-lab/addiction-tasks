@@ -58,7 +58,7 @@ class SetShiftTraining(Task):
         self.chamber_light.toggle(False)
 
     def start(self):
-        self.task_timeout.begin(self.max_duration * 60)
+        self.set_timeout("response_timeout", self.max_duration * 60)
         self.chamber_light.toggle(False)
 
     def stop(self):

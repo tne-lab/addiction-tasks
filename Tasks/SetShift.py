@@ -1,4 +1,5 @@
 import random
+import time
 from enum import Enum
 
 from Components.BinaryInput import BinaryInput
