@@ -1,5 +1,4 @@
 import random
-import time
 from enum import Enum
 
 from Components.BinaryInput import BinaryInput
@@ -9,9 +8,8 @@ from Events import PybEvents
 
 from Tasks.Task import Task
 
-from ..GUIs.SetShiftGUI import SetShiftGUI
 
-
+# noinspection PyAttributeOutsideInit
 class SetShift(Task):
     """@DynamicAttrs"""
     class States(Enum):
@@ -29,13 +27,13 @@ class SetShift(Task):
             'chamber_light': [Toggle]
         }
 
-    # noinspection PyMethodMayBeStatic
-    def get_constants(self):
+    @staticmethod
+    def get_constants():
         return {
             'max_duration': 90,
             'inter_trial_interval': 7,
             'response_duration': 3,
-            'n_random_start': 10,
+            'n_random_start': 3,
             'n_random_end': 5,
             'rule_sequence': [0, 1, 0, 2, 0, 1, 0, 2],
             'correct_to_switch': 5,
@@ -43,8 +41,8 @@ class SetShift(Task):
             'dispense_time': 0.7
         }
 
-    # noinspection PyMethodMayBeStatic
-    def get_variables(self):
+    @staticmethod
+    def get_variables():
         return {
             'cur_trial': 0,
             'cur_rule': 0,
@@ -76,7 +74,7 @@ class SetShift(Task):
         if isinstance(event, PybEvents.TimeoutEvent) and event.name == "task_complete":
             self.complete = True
             return True
-        elif isinstance(event, PybEvents.GUIEvent) and event.event == SetShiftGUI.Events.GUI_PELLET:
+        elif isinstance(event, PybEvents.GUIEvent) and event.name == "GUI_PELLET":
             self.food.toggle(self.dispense_time)
             return True
         return False
@@ -134,6 +132,8 @@ class SetShift(Task):
                         metadata["accuracy"] = "incorrect"
             self.change_state(self.States.INTER_TRIAL_INTERVAL, metadata)
         elif isinstance(event, PybEvents.TimeoutEvent) and event.name == "response_timeout":
+            self.cur_trial -= self.cur_block
+            self.cur_block = 0
             if self.cur_trial < self.n_random_start or self.cur_trial >= self.n_random_start + self.correct_to_switch * len(
                     self.rule_sequence):
                 metadata["rule_index"] = -1
