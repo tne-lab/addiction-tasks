@@ -7,8 +7,6 @@ from Components.BinaryInput import BinaryInput
 from Components.TimedToggle import TimedToggle
 from Components.Toggle import Toggle
 
-from ..GUIs.SetShiftTrainingGUI import SetShiftTrainingGUI
-
 
 class SetShiftTraining(Task):
     """@DynamicAttrs"""
@@ -28,8 +26,8 @@ class SetShiftTraining(Task):
             'chamber_light': [Toggle]
         }
 
-    # noinspection PyMethodMayBeStatic
-    def get_constants(self):
+    @staticmethod
+    def get_constants():
         return {
             'dispense_time': 0.7,
             'training_stage': 'middle',
@@ -40,8 +38,8 @@ class SetShiftTraining(Task):
             'light_seq': [0, 1, 0, 1, 1, 0, 0, 1, 1, 0]
         }
 
-    # noinspection PyMethodMayBeStatic
-    def get_variables(self):
+    @staticmethod
+    def get_variables():
         return {
             "pokes": 0
         }
@@ -69,7 +67,7 @@ class SetShiftTraining(Task):
     def RESPONSE(self, event: PybEvents.PybEvent):
         if isinstance(event, PybEvents.StateEnterEvent):
             self.nose_poke_lights[2 * self.light_seq[self.pokes]].toggle(True)
-            self.set_timeout("response_timeout", self.response_duration)
+            self.set_timeout("response_timeout", self.timeout)
         elif isinstance(event, PybEvents.TimeoutEvent) and event.name == "response_timeout":
             self.change_state(self.States.INTER_TRIAL_INTERVAL)
         elif isinstance(event, PybEvents.ComponentChangedEvent) and (event.comp is self.nose_pokes[0] or event.comp is self.nose_pokes[2]) and event.comp.state:
@@ -86,7 +84,7 @@ class SetShiftTraining(Task):
                 else:
                     self.pokes = 0
             self.change_state(self.States.INTER_TRIAL_INTERVAL)
-        elif isinstance(event, PybEvents.GUIEvent) and event.event == SetShiftTrainingGUI.Events.GUI_SHAPE:
+        elif isinstance(event, PybEvents.GUIEvent) and event.name == "GUI_SHAPE":
             self.pokes = 0
             self.food.toggle(self.dispense_time)
             self.change_state(self.States.INTER_TRIAL_INTERVAL)
@@ -98,7 +96,7 @@ class SetShiftTraining(Task):
         if isinstance(event, PybEvents.StateEnterEvent):
             self.nose_poke_lights[1].toggle(True)
         elif (isinstance(event, PybEvents.ComponentChangedEvent) and event.comp is self.nose_pokes[1]) \
-                or (isinstance(event, PybEvents.GUIEvent) and event.event == SetShiftTrainingGUI.Events.GUI_INIT):
+                or (isinstance(event, PybEvents.GUIEvent) and event.name == "GUI_INIT"):
             if isinstance(event, PybEvents.GUIEvent):
                 self.pokes = 0
             if self.training_stage == 'middle':
@@ -107,7 +105,7 @@ class SetShiftTraining(Task):
                 self.change_state(self.States.INTER_TRIAL_INTERVAL)
             else:
                 self.change_state(self.States.RESPONSE)
-        elif isinstance(event, PybEvents.GUIEvent) and event.event == SetShiftTrainingGUI.Events.GUI_SHAPE:
+        elif isinstance(event, PybEvents.GUIEvent) and event.name == "GUI_SHAPE":
             self.pokes = 0
             self.food.toggle(self.dispense_time)
             self.change_state(self.States.INTER_TRIAL_INTERVAL)

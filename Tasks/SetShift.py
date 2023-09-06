@@ -1,15 +1,16 @@
 import random
-import time
 from enum import Enum
 
+import numpy as np
+
 from Components.BinaryInput import BinaryInput
+from Components.StimJim import StimJim
 from Components.Toggle import Toggle
 from Components.TimedToggle import TimedToggle
+from Components.Video import Video
 from Events import PybEvents
 
 from Tasks.Task import Task
-
-from ..GUIs.SetShiftGUI import SetShiftGUI
 
 
 class SetShift(Task):
@@ -26,11 +27,13 @@ class SetShift(Task):
             'nose_poke_lights': [Toggle, Toggle, Toggle],
             'food': [TimedToggle],
             'house_light': [Toggle],
-            'chamber_light': [Toggle]
+            'chamber_light': [Toggle],
+            'video': [Video],
+            'stim': [StimJim]
         }
 
-    # noinspection PyMethodMayBeStatic
-    def get_constants(self):
+    @staticmethod
+    def get_constants():
         return {
             'max_duration': 90,
             'inter_trial_interval': 7,
@@ -40,11 +43,17 @@ class SetShift(Task):
             'rule_sequence': [0, 1, 0, 2, 0, 1, 0, 2],
             'correct_to_switch': 5,
             'light_sequence': random.sample([True for _ in range(27)] + [False for _ in range(28)], 55),
-            'dispense_time': 0.7
+            'dispense_time': 0.7,
+            'stim_dur': 360000000000,
+            'period': 7692,
+            'amps': [[6000], [0]],
+            'pw': 2000,
+            'stim_type': [0, 3],
+            'stim_on': False
         }
 
-    # noinspection PyMethodMayBeStatic
-    def get_variables(self):
+    @staticmethod
+    def get_variables():
         return {
             'cur_trial': 0,
             'cur_rule': 0,
@@ -64,19 +73,27 @@ class SetShift(Task):
         self.chamber_light.toggle(False)
 
     def start(self):
+        self.video.start()
         self.set_timeout("task_complete", self.max_duration * 60, end_with_state=False)
         self.chamber_light.toggle(False)
+        if self.stim_on:
+            self.stim.parametrize(0, self.stim_type, self.stim_dur, self.period, np.array(self.amps), self.pw)
+            self.stim.start(0)
 
     def stop(self):
+        if self.stim_on:
+            self.stim.parametrize(0, self.stim_type, 10000, self.period, np.array(self.amps), self.pw)
+            self.stim.start(0)
         self.chamber_light.toggle(True)
         for i in range(3):
             self.nose_poke_lights[i].toggle(False)
+        self.video.stop()
 
     def all_states(self, event: PybEvents.PybEvent) -> bool:
         if isinstance(event, PybEvents.TimeoutEvent) and event.name == "task_complete":
             self.complete = True
             return True
-        elif isinstance(event, PybEvents.GUIEvent) and event.event == SetShiftGUI.Events.GUI_PELLET:
+        elif isinstance(event, PybEvents.GUIEvent) and event.name == "GUI_PELLET":
             self.food.toggle(self.dispense_time)
             return True
         return False
@@ -85,8 +102,9 @@ class SetShift(Task):
         if isinstance(event, PybEvents.StateEnterEvent):
             self.nose_poke_lights[1].toggle(True)
         elif isinstance(event, PybEvents.ComponentChangedEvent) and event.comp is self.nose_pokes[1] and event.comp:
-            self.nose_poke_lights[1].toggle(False)
             self.change_state(self.States.RESPONSE, {"light_location": self.light_sequence[self.cur_trial]})
+        elif isinstance(event, PybEvents.StateExitEvent):
+            self.nose_poke_lights[1].toggle(False)
 
     def RESPONSE(self, event: PybEvents.PybEvent):
         metadata = {}
@@ -156,7 +174,7 @@ class SetShift(Task):
             self.change_state(self.States.INITIATION)
 
     def is_complete(self):
-        return self.cur_trial == self.n_random_start + self.n_random_end + self.correct_to_switch * len(self.rule_sequence)
+        return self.cur_trial == (self.n_random_start + self.n_random_end + self.correct_to_switch * len(self.rule_sequence))
 
     def correct(self):
         self.food.toggle(self.dispense_time)
