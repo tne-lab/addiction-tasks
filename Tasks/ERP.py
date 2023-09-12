@@ -63,7 +63,7 @@ class ERP(Task):
         return self.States.START_RECORD
 
     def start(self):
-        self.setup.parametrize(0, self.stim_type[0], self.stim_dur[0], self.period[0], np.array(self.amps[0]), self.pws[0])
+        self.setup.parametrize(0, self.stim_type[0], self.period[0], self.stim_dur[0], np.array(self.amps[0]), self.pws[0])
         self.setup.trigger(0, 0)
         self.stim.parametrize(0, 1, self.trig_dur, self.trig_dur, np.array([[self.trig_amp]]), [self.trig_dur])
         if self.use_sham:
@@ -113,7 +113,7 @@ class ERP(Task):
                 if self.pulse_count == self.npulse:
                     self.pulse_count = 0
                     if self.cur_set < len(self.period):
-                        self.setup.parametrize(0, self.stim_type[self.cur_set], self.stim_dur[self.cur_set], self.period[self.cur_set], np.array(self.amps[self.cur_set]), self.pws[self.cur_set])
+                        self.setup.parametrize(0, self.stim_type[self.cur_set], self.period[self.cur_set], self.stim_dur[self.cur_set], np.array(self.amps[self.cur_set]), self.pws[self.cur_set])
                     self.cur_set += 1
                 self.set_timeout("erp", self.cur_jitter + self.min_sep)
 

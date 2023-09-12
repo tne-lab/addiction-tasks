@@ -56,15 +56,7 @@ class SetShiftTrainingGUI(GUI):
         elif isinstance(event, PybEvents.ComponentUpdateEvent) and event.comp_id == self.food.id and event.value:
             self.food.count += 1
             self.pellets.set_text(str(self.food.count))
-        elif isinstance(event, PybEvents.ComponentUpdateEvent) and (event.comp_id == self.nose_pokes[0].id or event.comp_id == self.nose_pokes[2].id) and event.value:
-            if event.comp_id == self.nose_pokes[0].id:
-                if (self.nose_poke_lights[0].get_state() and self.training_stage == 'light') or self.training_stage == 'front':
-                    self.pokes += 1
-                else:
-                    self.pokes = 0
-            elif event.comp_id == self.nose_pokes[2].id:
-                if (self.nose_poke_lights[2].get_state() and self.training_stage == 'light') or self.training_stage == 'rear':
-                    self.pokes += 1
-                else:
-                    self.pokes = 0
+        elif isinstance(event, PybEvents.StateExitEvent) and event.name == "RESPONSE":
+            if "accuracy" in event.metadata:
+                self.pokes = self.pokes + 1 if event.metadata["accuracy"] == "correct" else 0
             self.trial_count.set_text(str(self.pokes+1))

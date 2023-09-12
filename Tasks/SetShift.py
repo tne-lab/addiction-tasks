@@ -46,8 +46,8 @@ class SetShift(Task):
             'dispense_time': 0.7,
             'stim_dur': 360000000000,
             'period': 7692,
-            'amps': [[6000], [0]],
-            'pw': 2000,
+            'amps': [[7000], [0]],
+            'pw': [2000],
             'stim_type': [0, 3],
             'stim_on': False
         }
@@ -77,12 +77,12 @@ class SetShift(Task):
         self.set_timeout("task_complete", self.max_duration * 60, end_with_state=False)
         self.chamber_light.toggle(False)
         if self.stim_on:
-            self.stim.parametrize(0, self.stim_type, self.stim_dur, self.period, np.array(self.amps), self.pw)
+            self.stim.parametrize(0, self.stim_type, self.period, self.stim_dur, np.array(self.amps), self.pw)
             self.stim.start(0)
 
     def stop(self):
         if self.stim_on:
-            self.stim.parametrize(0, self.stim_type, 10000, self.period, np.array(self.amps), self.pw)
+            self.stim.parametrize(0, self.stim_type, self.period, 10000, np.array(self.amps), self.pw)
             self.stim.start(0)
         self.chamber_light.toggle(True)
         for i in range(3):

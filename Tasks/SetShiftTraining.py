@@ -56,7 +56,7 @@ class SetShiftTraining(Task):
         self.chamber_light.toggle(False)
 
     def start(self):
-        self.set_timeout("response_timeout", self.max_duration * 60)
+        self.set_timeout("task_complete", self.max_duration * 60)
         self.chamber_light.toggle(False)
 
     def stop(self):
@@ -64,26 +64,38 @@ class SetShiftTraining(Task):
         for i in range(3):
             self.nose_poke_lights[i].toggle(False)
 
+    def all_states(self, event: PybEvents.PybEvent) -> bool:
+        if isinstance(event, PybEvents.TimeoutEvent) and event.name == "task_complete":
+            self.complete = True
+            return True
+        return False
+
     def RESPONSE(self, event: PybEvents.PybEvent):
+        metadata = {}
         if isinstance(event, PybEvents.StateEnterEvent):
             self.nose_poke_lights[2 * self.light_seq[self.pokes]].toggle(True)
             self.set_timeout("response_timeout", self.timeout)
         elif isinstance(event, PybEvents.TimeoutEvent) and event.name == "response_timeout":
-            self.change_state(self.States.INTER_TRIAL_INTERVAL)
+            metadata["accuracy"] = "incorrect"
+            self.change_state(self.States.INTER_TRIAL_INTERVAL, metadata)
         elif isinstance(event, PybEvents.ComponentChangedEvent) and (event.comp is self.nose_pokes[0] or event.comp is self.nose_pokes[2]) and event.comp.state:
             if event.comp is self.nose_pokes[0]:
                 if (self.nose_poke_lights[0].get_state() and self.training_stage == 'light') or self.training_stage == 'front':
                     self.food.toggle(self.dispense_time)
                     self.pokes += 1
+                    metadata["accuracy"] = "correct"
                 else:
                     self.pokes = 0
+                    metadata["accuracy"] = "incorrect"
             elif event.comp is self.nose_pokes[2]:
                 if (self.nose_poke_lights[2].get_state() and self.training_stage == 'light') or self.training_stage == 'rear':
                     self.food.toggle(self.dispense_time)
                     self.pokes += 1
+                    metadata["accuracy"] = "correct"
                 else:
                     self.pokes = 0
-            self.change_state(self.States.INTER_TRIAL_INTERVAL)
+                    metadata["accuracy"] = "incorrect"
+            self.change_state(self.States.INTER_TRIAL_INTERVAL, metadata)
         elif isinstance(event, PybEvents.GUIEvent) and event.name == "GUI_SHAPE":
             self.pokes = 0
             self.food.toggle(self.dispense_time)
