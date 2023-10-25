@@ -5,6 +5,7 @@ import numpy as np
 
 from Components.StimJim import StimJim
 from Events import PybEvents
+from Events.OENetworkLogger import OENetworkLogger
 from Tasks.Task import Task
 from Components.Stimmer import Stimmer
 
@@ -29,8 +30,8 @@ class ERP(Task):
             'setup': [StimJim]
         }
 
-    # noinspection PyMethodMayBeStatic
-    def get_constants(self):
+    @staticmethod
+    def get_constants():
         return {
             'use_sham': False,
             'ephys': False,
@@ -47,8 +48,8 @@ class ERP(Task):
             'trig_dur': 100
         }
 
-    # noinspection PyMethodMayBeStatic
-    def get_variables(self):
+    @staticmethod
+    def get_variables():
         return {
             "pulse_count": 0,
             "complete": False,
@@ -69,16 +70,16 @@ class ERP(Task):
         if self.use_sham:
             self.sham.parametrize(0, 1, self.trig_dur, self.trig_dur, np.array([[self.trig_amp]]), [self.trig_dur])
         if self.ephys:
-            self.log_event(PybEvents.OEEvent(self, "startRecord", {"pre": "ERP"}))
+            self.log_event(OENetworkLogger.OEEvent(self, "startRecord", {"pre": "ERP"}))
 
     def stop(self) -> None:
         if self.ephys:
-            self.log_event(PybEvents.OEEvent(self, "stopRecord"))
+            self.log_event(OENetworkLogger.OEEvent(self, "stopRecord"))
 
     def all_states(self, event: PybEvents.PybEvent) -> bool:
         if isinstance(event, PybEvents.ComponentChangedEvent) and event.comp is self.setup:
             for command in self.setup.commands:
-                self.log_event(PybEvents.InfoEvent(self, self.Events.SJ_RESPONSE, command))
+                self.log_event(PybEvents.InfoEvent(self.metadata["chamber"], self.Events.SJ_RESPONSE.name, self.Events.SJ_RESPONSE.value, metadata=command))
                 if command["command"] == "P":
                     self.cur_params = command
                 elif command["command"] == "C":
@@ -103,12 +104,12 @@ class ERP(Task):
                 if self.use_sham and self.sham_next:
                     self.sham.start(0)
                     self.sham_next = False
-                    self.log_event(PybEvents.InfoEvent(self, self.Events.SHAM))
+                    self.log_event(PybEvents.InfoEvent(self.metadata["chamber"], self.Events.SHAM.name, self.Events.SHAM.value))
                 else:
                     self.stim.start(0)
                     self.pulse_count += 1
                     self.sham_next = True
-                    self.log_event(PybEvents.InfoEvent(self, self.Events.STIM))
+                    self.log_event(PybEvents.InfoEvent(self.metadata["chamber"], self.Events.STIM.name, self.Events.STIM.value))
                 self.cur_jitter = random.uniform(0, 1) * self.jitter
                 if self.pulse_count == self.npulse:
                     self.pulse_count = 0
